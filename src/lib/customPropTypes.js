@@ -42,33 +42,39 @@ const findBestSuggestions = _.memoize((propValueWords, suggestions) => _.flow(
  * Useful for very large lists of options (e.g. Icon name, Flag name, etc.)
  * @param {string[]} suggestions An array of allowed values.
  */
-export const suggest = suggestions => (props, propName, componentName) => {
+export const suggest = (suggestions) => {
   if (!Array.isArray(suggestions)) {
-    throw new Error([
-      'Invalid argument supplied to suggest, expected an instance of array.',
-      ` See \`${propName}\` prop in \`${componentName}\`.`,
+    throw new Error('Invalid argument supplied to suggest, expected an instance of array.')
+  }
+
+  // Convert the suggestions list into
+  const suggestionsLookup = suggestions.reduce((acc, key) => {
+    acc[key] = true
+    return acc
+  }, {})
+
+  return (props, propName, componentName) => {
+    const propValue = props[propName]
+
+    // skip if prop is undefined or is included in the suggestions
+    if (!propValue || suggestionsLookup[propValue]) return
+
+    // find best suggestions
+    const propValueWords = propValue.split(' ')
+    const bestMatches = findBestSuggestions(propValueWords, suggestions)
+
+    // skip if a match scored 0
+    // since we're matching on words (classNames) this allows any word order to pass validation
+    // e.g. `left chevron` vs `chevron left`
+    if (bestMatches.some(x => x.score === 0)) return
+
+    return new Error([
+      `Invalid prop \`${propName}\` of value \`${propValue}\` supplied to \`${componentName}\`.`,
+      `\n\nInstead of \`${propValue}\`, did you mean:`,
+      bestMatches.map(x => `\n  - ${x.suggestion}`).join(''),
+      '\n',
     ].join(''))
   }
-  const propValue = props[propName]
-
-  // skip if prop is undefined or is included in the suggestions
-  if (_.isNil(propValue) || propValue === false || _.includes(propValue, suggestions)) return
-
-  // find best suggestions
-  const propValueWords = propValue.split(' ')
-  const bestMatches = findBestSuggestions(propValueWords, suggestions)
-
-  // skip if a match scored 0
-  // since we're matching on words (classNames) this allows any word order to pass validation
-  // e.g. `left chevron` vs `chevron left`
-  if (bestMatches.some(x => x.score === 0)) return
-
-  return new Error([
-    `Invalid prop \`${propName}\` of value \`${propValue}\` supplied to \`${componentName}\`.`,
-    `\n\nInstead of \`${propValue}\`, did you mean:`,
-    bestMatches.map(x => `\n  - ${x.suggestion}`).join(''),
-    '\n',
-  ].join(''))
 }
 
 /**
